@@ -1,109 +1,134 @@
-version: '3.8'
+# 수정된 docker-compose.yml (Apple Silicon 지원 + 포트 충돌 해결)
+
+networks:
+  microservices-network:
+    driver: bridge
+
+volumes:
+  oracle-data:
 
 services:
-  # Oracle Database 서비스
+  # ===========================
+  # Oracle Database 서비스 (Apple Silicon 지원)
+  # ===========================
   oracle-db:
+    # Apple Silicon용 에뮬레이션 실행 (안정적)
     image: container-registry.oracle.com/database/express:21.3.0-xe
+    platform: linux/amd64  # 에뮬레이션으로 실행
     container_name: oracle-xe-db
-    environment:
-      - ORACLE_PWD=password123
-      - ORACLE_CHARACTERSET=AL32UTF8
+    hostname: oracle-db
+    restart: unless-stopped
+
+    # 포트 설정 (원래대로 복원)
     ports:
-      - "1521:1521"
-      - "5500:5500"  # Oracle Enterprise Manager
+      - "1521:1521"  # Oracle DB
+      - "5500:5500"  # Enterprise Manager
+
+    environment:
+      # Oracle 설정 (공식 이미지용)
+      ORACLE_PWD: oracle123
+      ORACLE_CHARACTERSET: AL32UTF8
+
     volumes:
+      # 데이터 영속성
       - oracle-data:/opt/oracle/oradata
-      - ./sql-scripts:/docker-entrypoint-initdb.d/startup
+      # SQL 초기화 스크립트 마운트
+      - ./sql-scripts:/opt/oracle/scripts/startup
+
     networks:
       - microservices-network
-    restart: unless-stopped
+
+    # 헬스체크 설정 (공식 이미지용)
     healthcheck:
-      test: ["CMD", "sqlplus", "-L", "system/password123@//localhost:1521/XE", "@/dev/null"]
+      test: ["CMD", "sqlplus", "-L", "sys/oracle123@localhost:1521/XE as sysdba", "@/dev/null"]
       interval: 30s
       timeout: 10s
       retries: 5
+      start_period: 120s
 
+  # ===========================
   # User Service
+  # ===========================
   user-service:
     build:
       context: ./user-service
       dockerfile: Dockerfile
     container_name: user-service
+    hostname: user-service
+    restart: unless-stopped
+
     ports:
       - "8081:8080"
+
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:oracle:thin:@oracle-db:1521:XE
-      - SPRING_DATASOURCE_USERNAME=USER_SERVICE
-      - SPRING_DATASOURCE_PASSWORD=user123
+      # Spring 프로필 설정
+      SPRING_PROFILES_ACTIVE: docker
+      # Oracle 연결 정보 (포트 변경 반영)
+      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@oracle-db:1521:XE
+      SPRING_DATASOURCE_USERNAME: USER_SERVICE
+      SPRING_DATASOURCE_PASSWORD: user123
+
     depends_on:
       oracle-db:
         condition: service_healthy
+
     networks:
       - microservices-network
-    restart: unless-stopped
-    volumes:
-      - ./logs/user-service:/app/logs
 
+  # ===========================
   # Product Service
+  # ===========================
   product-service:
     build:
       context: ./product-service
       dockerfile: Dockerfile
     container_name: product-service
+    hostname: product-service
+    restart: unless-stopped
+
     ports:
       - "8082:8080"
+
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:oracle:thin:@oracle-db:1521:XE
-      - SPRING_DATASOURCE_USERNAME=PRODUCT_SERVICE
-      - SPRING_DATASOURCE_PASSWORD=product123
+      # Spring 프로필 설정
+      SPRING_PROFILES_ACTIVE: docker
+      # Oracle 연결 정보 (포트 변경 반영)
+      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@oracle-db:1521:XE
+      SPRING_DATASOURCE_USERNAME: PRODUCT_SERVICE
+      SPRING_DATASOURCE_PASSWORD: product123
+
     depends_on:
       oracle-db:
         condition: service_healthy
+
     networks:
       - microservices-network
-    restart: unless-stopped
-    volumes:
-      - ./logs/product-service:/app/logs
 
+  # ===========================
   # Order Service
+  # ===========================
   order-service:
     build:
       context: ./order-service
       dockerfile: Dockerfile
     container_name: order-service
+    hostname: order-service
+    restart: unless-stopped
+
     ports:
       - "8083:8080"
+
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:oracle:thin:@oracle-db:1521:XE
-      - SPRING_DATASOURCE_USERNAME=ORDER_SERVICE
-      - SPRING_DATASOURCE_PASSWORD=order123
-      - USER_SERVICE_URL=http://user-service:8080
-      - PRODUCT_SERVICE_URL=http://product-service:8080
+      # Spring 프로필 설정
+      SPRING_PROFILES_ACTIVE: docker
+      # Oracle 연결 정보 (포트 변경 반영)
+      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@oracle-db:1521:XE
+      SPRING_DATASOURCE_USERNAME: ORDER_SERVICE
+      SPRING_DATASOURCE_PASSWORD: order123
+
     depends_on:
       oracle-db:
         condition: service_healthy
-      user-service:
-        condition: service_started
-      product-service:
-        condition: service_started
+
     networks:
       - microservices-network
-    restart: unless-stopped
-    volumes:
-      - ./logs/order-service:/app/logs
-
-# 볼륨 정의
-volumes:
-  oracle-data:
-    driver: local
-
-# 네트워크 정의
-networks:
-  microservices-network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
