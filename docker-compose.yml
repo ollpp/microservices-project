@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  # Oracle Database 서비스
+  oracle-db:
+    image: container-registry.oracle.com/database/express:21.3.0-xe
+    container_name: oracle-xe-db
+    environment:
+      - ORACLE_PWD=password123
+      - ORACLE_CHARACTERSET=AL32UTF8
+    ports:
+      - "1521:1521"
+      - "5500:5500"  # Oracle Enterprise Manager
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+      - ./sql-scripts:/docker-entrypoint-initdb.d/startup
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sqlplus", "-L", "system/password123@//localhost:1521/XE", "@/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # User Service
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
+    container_name: user-service
+    ports:
+      - "8081:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:oracle:thin:@oracle-db:1521:XE
+      - SPRING_DATASOURCE_USERNAME=USER_SERVICE
+      - SPRING_DATASOURCE_PASSWORD=user123
+    depends_on:
+      oracle-db:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    volumes:
+      - ./logs/user-service:/app/logs
+
+  # Product Service
+  product-service:
+    build:
+      context: ./product-service
+      dockerfile: Dockerfile
+    container_name: product-service
+    ports:
+      - "8082:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:oracle:thin:@oracle-db:1521:XE
+      - SPRING_DATASOURCE_USERNAME=PRODUCT_SERVICE
+      - SPRING_DATASOURCE_PASSWORD=product123
+    depends_on:
+      oracle-db:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    volumes:
+      - ./logs/product-service:/app/logs
+
+  # Order Service
+  order-service:
+    build:
+      context: ./order-service
+      dockerfile: Dockerfile
+    container_name: order-service
+    ports:
+      - "8083:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:oracle:thin:@oracle-db:1521:XE
+      - SPRING_DATASOURCE_USERNAME=ORDER_SERVICE
+      - SPRING_DATASOURCE_PASSWORD=order123
+      - USER_SERVICE_URL=http://user-service:8080
+      - PRODUCT_SERVICE_URL=http://product-service:8080
+    depends_on:
+      oracle-db:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+      product-service:
+        condition: service_started
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    volumes:
+      - ./logs/order-service:/app/logs
+
+# 볼륨 정의
+volumes:
+  oracle-data:
+    driver: local
+
+# 네트워크 정의
+networks:
+  microservices-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
