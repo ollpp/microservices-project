@@ -64,9 +64,9 @@ services:
       # Spring 프로필 설정
       SPRING_PROFILES_ACTIVE: docker
       # Oracle 연결 정보 (포트 변경 반영)
-      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@oracle-db:1521:XE
-      SPRING_DATASOURCE_USERNAME: USER_SERVICE
-      SPRING_DATASOURCE_PASSWORD: user123
+      DB_HOST: oracle-db
+      DB_PORT: 1521
+      DB_SERVICE: XEPDB1
 
     depends_on:
       oracle-db:
@@ -93,9 +93,10 @@ services:
       # Spring 프로필 설정
       SPRING_PROFILES_ACTIVE: docker
       # Oracle 연결 정보 (포트 변경 반영)
-      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@oracle-db:1521:XE
-      SPRING_DATASOURCE_USERNAME: PRODUCT_SERVICE
-      SPRING_DATASOURCE_PASSWORD: product123
+      DB_HOST: oracle-db
+      DB_PORT: 1521
+      DB_SERVICE: XEPDB1
+      DB_SID: XEPDB1
 
     depends_on:
       oracle-db:
@@ -118,17 +119,26 @@ services:
     ports:
       - "8083:8080"
 
+
     environment:
       # Spring 프로필 설정
       SPRING_PROFILES_ACTIVE: docker
-      # Oracle 연결 정보 (포트 변경 반영)
-      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@oracle-db:1521:XE
-      SPRING_DATASOURCE_USERNAME: ORDER_SERVICE
-      SPRING_DATASOURCE_PASSWORD: order123
+      # Oracle 연결 정보
+      DB_HOST: oracle-db
+      DB_PORT: 1521
+      DB_SERVICE: XEPDB1
+      # 서비스 URL 추가
+      USER_SERVICE_URL: http://user-service:8080
+      PRODUCT_SERVICE_URL: http://product-service:8080
 
     depends_on:
       oracle-db:
         condition: service_healthy
+      user-service:  # 의존성 추가
+        condition: service_started
+      product-service:  # 의존성 추가
+        condition: service_started
+
 
     networks:
       - microservices-network
