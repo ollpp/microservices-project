@@ -8,9 +8,11 @@ spring:
 ---
 # local 프로파일
 spring:
-  profiles: local
+  config:
+    activate:
+      on-profile: local
   datasource:
-    url: jdbc:oracle:thin:@localhost:1521:XEPDB1
+    url: jdbc:oracle:thin:@localhost:1521/XEPDB1
     username: ORDER_SERVICE
     password: order123
     driver-class-name: oracle.jdbc.OracleDriver
@@ -37,9 +39,11 @@ server:
 ---
 # Docker Profile
 spring:
-  profiles: docker
+  config:
+    activate:
+      on-profile: docker
   datasource:
-    url: jdbc:oracle:thin:@${DB_HOST:oracle-db}:${DB_PORT:1521}:${DB_SID:XEPDB1}
+    url: jdbc:oracle:thin:@${DB_HOST:oracle-db}:${DB_PORT:1521}/XEPDB1
     username: ${DB_USERNAME:ORDER_SERVICE}
     password: ${DB_PASSWORD:order123}
     driver-class-name: oracle.jdbc.OracleDriver

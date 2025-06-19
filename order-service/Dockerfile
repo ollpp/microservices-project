@@ -24,7 +24,7 @@ RUN ./mvnw clean package -DskipTests
 # ===================================
 # Runtime stage (실행 환경)
 # ===================================
-FROM openjdk:17-jre-slim
+FROM openjdk:17-jdk-slim
 
 # 작업 디렉토리 설정
 WORKDIR /app
